@@ -10,8 +10,8 @@
 
 | Command | Output |
 |---------|--------|
-| `/paper find "cognitive load LLM"` | Searches OpenAlex → generates annotated HTML for top N papers |
-| `/paper read /path/to/file.pdf` | Annotates a single local PDF |
+| `/paper find "cognitive load LLM"` | Searches OpenAlex → generates Digest HTML with top N overview cards |
+| `/paper read /path/to/file.pdf` | Fully annotates a single local PDF |
 | `/paper digest` | Daily digest of new arxiv papers matching your keywords |
 | `/paper cite [[Author-YYYY-note]]` | Generates APA 7th + BibTeX from an existing annotation |
 
@@ -20,6 +20,7 @@ Each annotation is a **self-contained HTML file** with:
 - **5-color logical highlights** — thesis · concept · evidence · concession · methodology
 - **Dual-column layout** — original text on the left, annotation cards on the right
 - **Argument structure overview** at the bottom — full logical skeleton of the paper
+- **One-click copy buttons** for APA and BibTeX citations
 
 ## Installation
 
@@ -30,7 +31,9 @@ your-project/
 └── .agents/
     └── skills/
         └── paper/
-            └── SKILL.md
+            ├── SKILL.md
+            └── references/
+                └── template.css   ← customizable CSS for all HTML output
 ```
 
 Then run `/paper find "your topic"` in Claude Code. That's it.
@@ -68,16 +71,27 @@ paper_annotation_lang: en
 ```
 /paper find "retrieval augmented generation"
 /paper find "transformer attention" --top 10
-/paper find "diffusion models" --source venues    # OpenAlex only, peer-reviewed
+/paper find "transformer attention" 10            # bare number = --top 10
+/paper find "diffusion models" --source venues    # peer-reviewed only (config venues list)
 /paper find "LLM agents 2025" --source arxiv      # latest preprints only
 /paper find "X" --lang en                         # English annotations
+
+# Local PDF digest — no API calls needed:
+/paper find --local ~/Downloads/papers/           # all PDFs in folder
+/paper find --local a.pdf b.pdf c.pdf             # specific files
+/paper find --local ~/Downloads/ --top 3          # limit to 3 files
 ```
 
-Results are organized into subfolders automatically:
+Output is organized automatically:
+
 ```
 papers/
-├── Venues/    ← OpenAlex results with a real venue
-└── arXiv/     ← preprints
+├── {Author-YYYY-keyword}.html        ← /paper read output (flat)
+├── FindResults/
+│   ├── find-2026-03-14-1430-cognitive-load-llm.html    ← /paper find
+│   └── find-local-2026-03-14-1445-downloads.html       ← /paper find --local
+└── PaperDigests/
+    └── 2026-03-14-digest.html                           ← /paper digest
 ```
 
 Re-running the same query skips existing files and marks them `[already exists]` in the summary.
@@ -111,16 +125,37 @@ Outputs APA 7th + BibTeX directly. Nothing saved — just copy from the terminal
 | Flag | Strategy | Ranking | Best for |
 |------|----------|---------|----------|
 | *(default)* | 2× OpenAlex (by citations + by year), merged | `0.5 relevance + 0.3 log(citations) + 0.2 recency` | Balanced: classics + recent |
-| `--source venues` | OpenAlex only, arxiv filtered out | `0.5 relevance + 0.5 log(citations)` | Peer-reviewed only |
+| `--source venues` | OpenAlex only, only papers matching config `venues` list | `0.5 relevance + 0.5 log(citations)` | Peer-reviewed only |
 | `--source arxiv` | arxiv only | `0.5 relevance + 0.5 recency` | Latest preprints |
+| `--local /path/` | Local PDFs only — no API calls | Alphabetical, truncated to `--top N` | Offline / existing downloads |
 
 The default mode makes **two** API calls (sorted by citations, then by year) so both highly-cited classics and recent publications appear in results.
+
+> **Flag syntax is flexible** — flags can be written with or without `--`. Claude accepts natural language equivalents: `top 5`, `source venues`, `local /path/`, `questions "..."`.
 
 ## Annotation modes
 
 **Mode B (default):** Logic analysis. Right-column cards break down each paragraph's function, logical role, and rhetorical technique. Works with zero configuration.
 
-**Mode A (`--questions`):** Question-driven. Highlights and cards are organized around your specific research questions — useful for systematic literature reviews.
+**Mode A (`--questions`):** Question-driven annotation. Highlights and cards are organized around your specific research questions.
+
+```
+# Inline questions:
+/paper read paper.pdf --questions "Q1: What method? Q2: How does it compare to baselines?"
+
+# Interactive (Claude asks first):
+/paper read paper.pdf --questions
+# → Claude: "请输入你的阅读问题（每行一个，或逗号分隔，最多6个）："
+
+# Labels are optional — all formats accepted:
+/paper read paper.pdf --questions "method, dataset size, limitations"
+/paper read paper.pdf --questions "method; dataset size; limitations"
+```
+
+**Mode A output:**
+- Colors assigned per-question (Q1 = color 1, Q2 = color 2, …)
+- Annotation cards explain which question each paragraph addresses
+- Bottom section = Q&A Worksheet (one card per question: core argument + key evidence + limitation)
 
 ## Data sources
 
@@ -133,7 +168,7 @@ The default mode makes **two** API calls (sorted by citations, then by year) so 
 ## Requirements
 
 - Claude Code
-- Network access (OpenAlex / arxiv APIs)
+- Network access (OpenAlex / arxiv APIs) — not needed for `--local` or `read`
 - No API keys required for basic use
 
 ## License
